@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+enum AttendanceStatus {
+  PRESENT
+  WFH
+  LEAVE
+}
+
+enum TaskStatus {
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+}
+
+model Team {
+  id        Int     @id @default(autoincrement())
+  name      String
+
+  managerId Int?    @unique
+  manager   User?   @relation("ManagedTeam", fields: [managerId], references: [id])
+
+  members   User[]
+}
+
+model User {
+  id            Int @id @default(autoincrement())
+
+  name          String
+  email         String @unique
+  password      String
+
+  role          Role
+
+  teamId        Int?
+  team          Team? @relation(fields: [teamId], references: [id])
+
+  leaveBalance  Int @default(20)
+
+  attendance    Attendance[]
+  workLogs      WorkLog[]
+  leaveRequests LeaveRequest[]
+
+  managedTeam Team? @relation("ManagedTeam")
+}
+
+model Attendance {
+  id          Int @id @default(autoincrement())
+
+  userId      Int
+  user        User @relation(fields: [userId], references: [id])
+
+  date        DateTime
+
+  checkIn     DateTime?
+  checkOut    DateTime?
+
+  hoursWorked Float?
+
+  late        Boolean @default(false)
+
+  status      AttendanceStatus
+
+  @@unique([userId, date])
+}
+
+model WorkLog {
+  id          Int @id @default(autoincrement())
+
+  userId      Int
+  user        User @relation(fields: [userId], references: [id])
+
+  date        DateTime
+
+  title       String
+  description String
+
+  project     String
+
+  hoursSpent  Float
+
+  status      TaskStatus
+
+  createdAt   DateTime @default(now())
+}
+
+model LeaveRequest {
+  id         Int @id @default(autoincrement())
+
+  userId     Int
+  user       User @relation(fields: [userId], references: [id])
+
+  type       LeaveType
+
+  startDate  DateTime
+  endDate    DateTime
+
+  reason     String
+
+  status     LeaveStatus @default(PENDING)
+
+  approverId Int?
+
+  createdAt  DateTime @default(now())
+}
