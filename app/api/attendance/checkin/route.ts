@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const parsed = checkinSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     if (existing) {
       return Response.json(
-        { error: "Already checked in today" },
+        { success: false, error: "Already checked in today" },
         { status: 409 }
       );
     }
@@ -80,8 +80,11 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[attendance/checkin]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

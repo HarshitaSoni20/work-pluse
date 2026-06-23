@@ -2,7 +2,23 @@ import { Role } from "@prisma/client";
 import { UserPayload } from "@/types";
 import { verifyToken } from "@/lib/jwt";
 
+import { cookies } from "next/headers";
+
 const TOKEN_COOKIE = "workpulse_token";
+
+/**
+ * Retrieves the current authenticated user using async cookies() API.
+ */
+export async function getCurrentUser(): Promise<UserPayload | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(TOKEN_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    return verifyToken(token);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Extracts and verifies the JWT from the request cookie.

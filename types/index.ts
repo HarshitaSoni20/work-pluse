@@ -4,7 +4,7 @@ import { Role } from "@prisma/client";
 
 export interface UserPayload {
   id: number;
-  name: string;
+  name?: string;
   email: string;
   role: Role;
   teamId: number | null;

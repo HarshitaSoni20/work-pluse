@@ -20,16 +20,18 @@ interface StatCardProps {
   icon?: ReactNode;
   iconBg?: string;
   iconColor?: string;
+  children?: ReactNode;
 }
 
-export function StatCard({ label, value, sub, icon, iconBg, iconColor }: StatCardProps) {
+export function StatCard({ label, value, sub, icon, iconBg, iconColor, children }: StatCardProps) {
   return (
     <div className="stat-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div className="stat-card-label">{label}</div>
           <div className="stat-card-value">{value}</div>
           {sub && <div className="stat-card-sub">{sub}</div>}
+          {children && <div style={{ marginTop: "0.75rem" }}>{children}</div>}
         </div>
         {icon && (
           <div
@@ -37,6 +39,7 @@ export function StatCard({ label, value, sub, icon, iconBg, iconColor }: StatCar
             style={{
               background: iconBg ?? "var(--color-primary-light)",
               color: iconColor ?? "var(--color-primary)",
+              marginLeft: "0.75rem",
             }}
           >
             {icon}

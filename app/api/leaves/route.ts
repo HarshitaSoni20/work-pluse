@@ -47,8 +47,10 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / pageSize),
     });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[leaves/GET]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

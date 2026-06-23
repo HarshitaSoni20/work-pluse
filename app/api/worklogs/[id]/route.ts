@@ -31,19 +31,19 @@ export async function PUT(
     const logId = parseInt(id);
 
     if (isNaN(logId)) {
-      return Response.json({ error: "Invalid work log ID" }, { status: 400 });
+      return Response.json({ success: false, error: "Invalid work log ID" }, { status: 400 });
     }
 
     const worklog = await getWorklogOrFail(logId, user.id, user.role);
     if (!worklog) {
-      return Response.json({ error: "Work log not found or access denied" }, { status: 404 });
+      return Response.json({ success: false, error: "Work log not found or access denied" }, { status: 404 });
     }
 
     const body = await request.json();
     const parsed = worklogUpdateSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -57,16 +57,24 @@ export async function PUT(
         ...(data.project !== undefined && { project: data.project }),
         ...(data.hoursSpent !== undefined && { hoursSpent: data.hoursSpent }),
         ...(data.status !== undefined && { status: data.status }),
-        ...(data.date !== undefined && { date: new Date(data.date) }),
+        ...(data.date !== undefined && {
+          date: (() => {
+            const [y, m, d] = data.date.split("-").map(Number);
+            return new Date(y, m - 1, d);
+          })()
+        }),
       },
       include: { user: { select: { name: true, email: true } } },
     });
 
     return Response.json({ message: "Work log updated", worklog: updated });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[worklogs/PUT]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -80,21 +88,24 @@ export async function DELETE(
     const logId = parseInt(id);
 
     if (isNaN(logId)) {
-      return Response.json({ error: "Invalid work log ID" }, { status: 400 });
+      return Response.json({ success: false, error: "Invalid work log ID" }, { status: 400 });
     }
 
     // Employees can only delete their own; managers/admins follow getWorklogOrFail
     const worklog = await getWorklogOrFail(logId, user.id, user.role);
     if (!worklog) {
-      return Response.json({ error: "Work log not found or access denied" }, { status: 404 });
+      return Response.json({ success: false, error: "Work log not found or access denied" }, { status: 404 });
     }
 
     await prisma.workLog.delete({ where: { id: logId } });
 
     return Response.json({ message: "Work log deleted" });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[worklogs/DELETE]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

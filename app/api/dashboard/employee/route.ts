@@ -85,8 +85,11 @@ export async function GET(request: Request) {
       taskDistribution,
     });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[dashboard/employee]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

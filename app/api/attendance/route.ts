@@ -1,19 +1,31 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = requireAuth(request);
+    const user = await getCurrentUser();
+    if (!user) {
+      return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log("Current user:", user);
+    console.log("Role:", user.role);
+    console.log("Attendance query executing");
+
     const { searchParams } = request.nextUrl;
 
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const userIdParam = searchParams.get("userId");
-    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") ?? "20")));
+    
+    // Validate page/pageSize and prevent NaN values from reaching Prisma
+    const rawPage = parseInt(searchParams.get("page") ?? "1");
+    const page = isNaN(rawPage) ? 1 : Math.max(1, rawPage);
+    
+    const rawPageSize = parseInt(searchParams.get("pageSize") ?? "20");
+    const pageSize = isNaN(rawPageSize) ? 20 : Math.min(100, Math.max(1, rawPageSize));
 
-    // Build the where clause based on role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
 
@@ -34,25 +46,47 @@ export async function GET(request: NextRequest) {
         select: { id: true },
       });
       const memberIds = teamMembers.map((m) => m.id);
+      
+      // Managers can also see their own attendance
+      if (!memberIds.includes(user.id)) {
+        memberIds.push(user.id);
+      }
+      
       where.userId = { in: memberIds };
 
-      // Allow filtering to specific member
-      if (userIdParam) {
+      // Allow filtering to specific member if valid and authorized
+      if (userIdParam && userIdParam !== "all" && userIdParam !== "undefined" && userIdParam !== "") {
         const uid = parseInt(userIdParam);
-        if (!memberIds.includes(uid)) {
-          return Response.json({ error: "Forbidden" }, { status: 403 });
+        if (!isNaN(uid)) {
+          if (!memberIds.includes(uid)) {
+            return Response.json({ success: false, error: "Forbidden: insufficient permissions" }, { status: 403 });
+          }
+          where.userId = uid;
         }
-        where.userId = uid;
       }
     } else {
-      // Admin sees everything, can filter by userId
-      if (userIdParam) {
-        where.userId = parseInt(userIdParam);
+      // Admin sees everything, can filter by userId if valid
+      if (userIdParam && userIdParam !== "all" && userIdParam !== "undefined" && userIdParam !== "") {
+        const uid = parseInt(userIdParam);
+        if (!isNaN(uid)) {
+          where.userId = uid;
+        }
       }
     }
 
-    if (startDate) where.date = { ...where.date, gte: new Date(startDate) };
-    if (endDate) where.date = { ...where.date, lte: new Date(endDate + "T23:59:59") };
+    // Safely parse and set date filters
+    if (startDate && startDate !== "undefined" && startDate !== "null" && startDate !== "") {
+      const parsedStart = new Date(startDate);
+      if (!isNaN(parsedStart.getTime())) {
+        where.date = { ...where.date, gte: parsedStart };
+      }
+    }
+    if (endDate && endDate !== "undefined" && endDate !== "null" && endDate !== "") {
+      const parsedEnd = new Date(endDate + "T23:59:59");
+      if (!isNaN(parsedEnd.getTime())) {
+        where.date = { ...where.date, lte: parsedEnd };
+      }
+    }
 
     const [items, total] = await Promise.all([
       prisma.attendance.findMany({
@@ -74,9 +108,14 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     });
-  } catch (err) {
-    if (err instanceof Response) return err;
-    console.error("[attendance/GET]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+  } catch (error) {
+    console.error("[attendance/GET] Error:", error);
+    return Response.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Internal server error"
+      },
+      { status: 500 }
+    );
   }
 }

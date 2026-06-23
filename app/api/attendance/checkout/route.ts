@@ -1,43 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 
-function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
 export async function POST(request: Request) {
   try {
     const user = requireAuth(request);
 
     const now = new Date();
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
 
     const attendance = await prisma.attendance.findFirst({
-      where: {
-        userId: user.id,
-        date: { gte: todayStart, lte: todayEnd },
-      },
+      where: { userId: user.id },
+      orderBy: { checkIn: "desc" },
     });
 
     if (!attendance) {
       return Response.json(
-        { error: "No check-in found for today. Please check in first." },
+        { success: false, error: "No check-in found. Please check in first." },
         { status: 404 }
       );
     }
 
-    if (attendance.checkOut) {
+    if (attendance.checkOut !== null) {
       return Response.json(
-        { error: "Already checked out for today" },
+        { success: false, error: "Already checked out" },
         { status: 409 }
       );
     }
@@ -62,8 +46,19 @@ export async function POST(request: Request) {
       attendance: updated,
     });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      return Response.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
     console.error("[attendance/checkout]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json(
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Internal server error",
+      },
+      { status: 500 }
+    );
   }
 }

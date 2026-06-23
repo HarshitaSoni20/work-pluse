@@ -63,9 +63,12 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / pageSize),
     });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[worklogs/GET]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -77,12 +80,15 @@ export async function POST(request: Request) {
     const parsed = worklogSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
     const { title, description, project, hoursSpent, status, date } = parsed.data;
+
+    const [y, m, d] = date.split("-").map(Number);
+    const localDate = new Date(y, m-1, d);
 
     const worklog = await prisma.workLog.create({
       data: {
@@ -92,15 +98,18 @@ export async function POST(request: Request) {
         project,
         hoursSpent,
         status,
-        date: new Date(date),
+        date: localDate,
       },
       include: { user: { select: { name: true, email: true } } },
     });
 
     return Response.json({ message: "Work log created", worklog }, { status: 201 });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[worklogs/POST]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

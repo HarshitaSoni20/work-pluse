@@ -15,22 +15,26 @@ export async function POST(request: Request) {
     const parsed = leaveApplySchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
 
     const { type, startDate, endDate, reason } = parsed.data;
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const [sy, sm, sd] = startDate.split("-").map(Number);
+    const start = new Date(sy, sm - 1, sd);
+
+    const [ey, em, ed] = endDate.split("-").map(Number);
+    const end = new Date(ey, em - 1, ed);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     // No past dates
     if (start < today) {
       return Response.json(
-        { error: "Leave start date cannot be in the past" },
+        { success: false, error: "Leave start date cannot be in the past" },
         { status: 400 }
       );
     }
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
     // Start must be ≤ end
     if (start > end) {
       return Response.json(
-        { error: "Start date must be before or equal to end date" },
+        { success: false, error: "Start date must be before or equal to end date" },
         { status: 400 }
       );
     }
@@ -54,6 +58,7 @@ export async function POST(request: Request) {
     if (!dbUser || dbUser.leaveBalance < leaveDays) {
       return Response.json(
         {
+          success: false,
           error: `Insufficient leave balance. You have ${dbUser?.leaveBalance ?? 0} day(s) remaining but requested ${leaveDays} day(s).`,
         },
         { status: 400 }
@@ -73,7 +78,7 @@ export async function POST(request: Request) {
 
     if (overlap) {
       return Response.json(
-        { error: "You have an overlapping approved leave for the selected dates" },
+        { success: false, error: "You have an overlapping approved leave for the selected dates" },
         { status: 409 }
       );
     }
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
 
     if (pendingOverlap) {
       return Response.json(
-        { error: "You already have a pending leave request for the selected dates" },
+        { success: false, error: "You already have a pending leave request for the selected dates" },
         { status: 409 }
       );
     }
@@ -112,8 +117,10 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[leaves/apply]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

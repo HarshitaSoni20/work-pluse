@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       return Response.json(
-        { error: "Invalid email or password" },
+        { success: false, error: "Invalid email or password" },
         { status: 401 }
       );
     }
@@ -41,14 +41,13 @@ export async function POST(request: Request) {
     const valid = await comparePassword(password, user.password);
     if (!valid) {
       return Response.json(
-        { error: "Invalid email or password" },
+        { success: false, error: "Invalid email or password" },
         { status: 401 }
       );
     }
 
     const token = signToken({
       id: user.id,
-      name: user.name,
       email: user.email,
       role: user.role,
       teamId: user.teamId,
@@ -66,6 +65,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("[login]", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

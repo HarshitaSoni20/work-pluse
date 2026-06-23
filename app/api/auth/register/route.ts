@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     // Check for existing user
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return Response.json({ error: "Email already registered" }, { status: 409 });
+      return Response.json({ success: false, error: "Email already registered" }, { status: 409 });
     }
 
     const hashedPassword = await hashPassword(password);
@@ -39,7 +39,6 @@ export async function POST(request: Request) {
 
     const token = signToken({
       id: user.id,
-      name: user.name,
       email: user.email,
       role: user.role,
       teamId: user.teamId,
@@ -59,6 +58,6 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("[register]", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

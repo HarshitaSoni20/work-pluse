@@ -15,7 +15,7 @@ export async function PATCH(request: Request) {
     const parsed = leaveActionSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
-        { error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
+        { success: false, error: "Validation failed", issues: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -28,12 +28,12 @@ export async function PATCH(request: Request) {
     });
 
     if (!leave) {
-      return Response.json({ error: "Leave request not found" }, { status: 404 });
+      return Response.json({ success: false, error: "Leave request not found" }, { status: 404 });
     }
 
     if (leave.status !== "PENDING") {
       return Response.json(
-        { error: `Cannot approve a leave that is already ${leave.status.toLowerCase()}` },
+        { success: false, error: `Cannot approve a leave that is already ${leave.status.toLowerCase()}` },
         { status: 409 }
       );
     }
@@ -46,7 +46,7 @@ export async function PATCH(request: Request) {
       });
       if (!team || leave.user.teamId !== team.id) {
         return Response.json(
-          { error: "You can only approve leave for employees in your team" },
+          { success: false, error: "You can only approve leave for employees in your team" },
           { status: 403 }
         );
       }
@@ -57,7 +57,7 @@ export async function PATCH(request: Request) {
     // Check balance again at approval time (might have changed)
     if (leave.user.leaveBalance < leaveDays) {
       return Response.json(
-        { error: "Employee has insufficient leave balance" },
+        { success: false, error: "Employee has insufficient leave balance" },
         { status: 400 }
       );
     }
@@ -76,8 +76,11 @@ export async function PATCH(request: Request) {
 
     return Response.json({ message: "Leave approved", leave: updatedLeave });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[leaves/approve]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

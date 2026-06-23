@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { subDays, startOfDay, endOfDay } from "date-fns";
+import { subDays, startOfDay, endOfDay, format } from "date-fns";
 
 export async function GET(request: Request) {
   try {
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
             },
             workLogs: {
               where: { date: { gte: weekStart, lte: weekEnd } },
-              select: { hoursSpent: true, status: true },
+              select: { hoursSpent: true, status: true, date: true },
             },
             leaveRequests: {
               where: { status: "PENDING" },
@@ -42,6 +42,9 @@ export async function GET(request: Request) {
       return Response.json({
         cards: { teamSize: 0, presentToday: 0, pendingApprovals: 0, blockedTasks: 0, underLoggers: 0 },
         teamTable: [],
+        dailyTrend: [],
+        taskDistribution: [],
+        attendanceDistribution: [],
       });
     }
 
@@ -95,6 +98,77 @@ export async function GET(request: Request) {
     const blockedTasksTotal = teamTable.reduce((s, m) => s + m.blockedTasks, 0);
     const underLoggers = teamTable.filter((m) => m.weeklyHours < 30).length;
 
+    // Aggregate Task Status Distribution
+    const taskCountMap: Record<string, number> = {
+      IN_PROGRESS: 0,
+      DONE: 0,
+      BLOCKED: 0,
+    };
+    members.forEach((m) => {
+      m.workLogs.forEach((wl) => {
+        if (taskCountMap[wl.status] !== undefined) {
+          taskCountMap[wl.status]++;
+        }
+      });
+    });
+    const taskDistribution = Object.entries(taskCountMap).map(([status, count]) => ({
+      status,
+      count,
+    }));
+
+    // Aggregate Attendance Status Distribution for today
+    let presentTodayCount = 0;
+    let wfhTodayCount = 0;
+    let absentTodayCount = 0;
+
+    members.forEach((m) => {
+      const todayRecord = m.attendance.find(
+        (a) => new Date(a.date) >= todayStart && new Date(a.date) <= todayEnd
+      );
+      if (todayRecord) {
+        if (todayRecord.status === "PRESENT") presentTodayCount++;
+        else if (todayRecord.status === "WFH") wfhTodayCount++;
+        else absentTodayCount++;
+      } else {
+        absentTodayCount++;
+      }
+    });
+
+    const attendanceDistribution = [
+      { name: "In Office", value: presentTodayCount },
+      { name: "Remote (WFH)", value: wfhTodayCount },
+      { name: "Absent", value: absentTodayCount },
+    ];
+
+    // Generate last 7 days daily trend data
+    const dailyTrendMap = new Map<string, { date: string; hours: number; inProgress: number; done: number; blocked: number }>();
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(now, i);
+      const dateStr = format(d, "MMM dd");
+      dailyTrendMap.set(dateStr, {
+        date: dateStr,
+        hours: 0,
+        inProgress: 0,
+        done: 0,
+        blocked: 0,
+      });
+    }
+
+    members.forEach((m) => {
+      m.workLogs.forEach((wl) => {
+        const dateStr = format(new Date(wl.date), "MMM dd");
+        const entry = dailyTrendMap.get(dateStr);
+        if (entry) {
+          entry.hours += wl.hoursSpent;
+          if (wl.status === "IN_PROGRESS") entry.inProgress++;
+          else if (wl.status === "DONE") entry.done++;
+          else if (wl.status === "BLOCKED") entry.blocked++;
+        }
+      });
+    });
+
+    const dailyTrend = Array.from(dailyTrendMap.values());
+
     return Response.json({
       cards: {
         teamSize,
@@ -104,10 +178,16 @@ export async function GET(request: Request) {
         underLoggers,
       },
       teamTable,
+      dailyTrend,
+      taskDistribution,
+      attendanceDistribution,
     });
   } catch (err) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) {
+      const status = err.status;
+      return Response.json({ success: false, error: status === 403 ? "Forbidden: insufficient permissions" : "Unauthorized" }, { status });
+    }
     console.error("[dashboard/manager]", err);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/jwt";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { UserProvider } from "@/components/providers/UserProvider";
+import { ClientDashboardLayout } from "@/components/layout/ClientDashboardLayout";
 
 export default async function DashboardLayout({
   children,
@@ -17,13 +18,8 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar
-        userName={user.name}
-        userEmail={user.email}
-        userRole={user.role}
-      />
-      <div className="main-content">{children}</div>
-    </div>
+    <UserProvider>
+      <ClientDashboardLayout>{children}</ClientDashboardLayout>
+    </UserProvider>
   );
 }
