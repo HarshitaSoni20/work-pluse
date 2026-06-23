@@ -47,6 +47,8 @@ Prisma ORM
 Database
 PostgreSQL
 Entity Relationship Diagram (ER Diagram)
+
+
                             ┌─────────────┐
                             │    Teams    │
                             ├─────────────┤
